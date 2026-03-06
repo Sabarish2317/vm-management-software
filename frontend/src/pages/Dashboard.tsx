@@ -75,7 +75,13 @@ interface TabBtnProps {
   count?: number
 }
 
-const TabBtn: React.FC<TabBtnProps> = ({ active, onClick, icon, label, count }) => (
+const TabBtn: React.FC<TabBtnProps> = ({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+}) => (
   <button
     onClick={onClick}
     className={cn(
@@ -90,8 +96,10 @@ const TabBtn: React.FC<TabBtnProps> = ({ active, onClick, icon, label, count }) 
     {count !== undefined && (
       <span
         className={cn(
-          'rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none',
-          active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-foreground'
+          'rounded-full px-1.5 py-0.5 text-[10px] leading-none font-bold',
+          active
+            ? 'bg-primary-foreground/20 text-primary-foreground'
+            : 'bg-background text-foreground'
         )}
       >
         {count}

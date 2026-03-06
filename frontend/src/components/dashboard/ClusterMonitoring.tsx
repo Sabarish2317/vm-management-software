@@ -46,9 +46,10 @@ function healthLabel(pct: number): { text: string; cls: string } {
 }
 
 function StatusIcon({ pct }: { pct: number }) {
-  if (pct >= 90) return <XCircle size={13} className="text-red-500 shrink-0" />
-  if (pct >= 75) return <MinusCircle size={13} className="text-amber-500 shrink-0" />
-  return <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+  if (pct >= 90) return <XCircle size={13} className="shrink-0 text-red-500" />
+  if (pct >= 75)
+    return <MinusCircle size={13} className="shrink-0 text-amber-500" />
+  return <CheckCircle2 size={13} className="shrink-0 text-emerald-500" />
 }
 
 function NodeStatusDot({ status }: { status: NodeMetrics['status'] }) {
@@ -86,12 +87,14 @@ interface ColHeaderProps {
   subtitle: string
 }
 const ColHeader: React.FC<ColHeaderProps> = ({ icon, title, subtitle }) => (
-  <th className="bg-slate-50 border-b border-r border-slate-200 px-4 py-3 text-left align-top">
-    <div className="flex items-center gap-1.5 font-semibold text-slate-700 text-sm">
+  <th className="border-r border-b border-slate-200 bg-slate-50 px-4 py-3 text-left align-top">
+    <div className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
       {icon}
       {title}
     </div>
-    <div className="mt-0.5 text-[11px] text-slate-400 font-normal">{subtitle}</div>
+    <div className="mt-0.5 text-[11px] font-normal text-slate-400">
+      {subtitle}
+    </div>
   </th>
 )
 
@@ -102,7 +105,22 @@ function exportCSV(nodes: NodeMetrics[], mode: 'health' | 'performance') {
   let rows: string[][]
 
   if (mode === 'health') {
-    headers = ['Device Name', 'IP', 'OS', 'CPU%', 'CPU Health', 'Mem%', 'Mem Health', 'Disk%', 'Disk Health', 'Net RX/s', 'Net TX/s', 'Net Health', 'Temp °C', 'Status']
+    headers = [
+      'Device Name',
+      'IP',
+      'OS',
+      'CPU%',
+      'CPU Health',
+      'Mem%',
+      'Mem Health',
+      'Disk%',
+      'Disk Health',
+      'Net RX/s',
+      'Net TX/s',
+      'Net Health',
+      'Temp °C',
+      'Status',
+    ]
     rows = nodes.map((n) => [
       n.hostname || n.name,
       n.instance,
@@ -120,7 +138,20 @@ function exportCSV(nodes: NodeMetrics[], mode: 'health' | 'performance') {
       n.status,
     ])
   } else {
-    headers = ['Device Name', 'IP', 'OS', 'Avg CPU%', 'Avg Mem%', 'Avg Disk%', 'Net Speed RX', 'Net Speed TX', 'Disk R/s', 'Disk W/s', 'Load 1m', 'Processes']
+    headers = [
+      'Device Name',
+      'IP',
+      'OS',
+      'Avg CPU%',
+      'Avg Mem%',
+      'Avg Disk%',
+      'Net Speed RX',
+      'Net Speed TX',
+      'Disk R/s',
+      'Disk W/s',
+      'Load 1m',
+      'Processes',
+    ]
     rows = nodes.map((n) => [
       n.hostname || n.name,
       n.instance,
@@ -137,7 +168,9 @@ function exportCSV(nodes: NodeMetrics[], mode: 'health' | 'performance') {
     ])
   }
 
-  const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
+  const csv = [headers, ...rows]
+    .map((r) => r.map((c) => `"${c}"`).join(','))
+    .join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -169,7 +202,10 @@ const ClusterMonitoring: React.FC<Props> = ({
   const [view, setView] = useState<'health' | 'performance'>('health')
 
   const filtered = useMemo(() => {
-    let list = selectedNode === 'all' ? nodes : nodes.filter((n) => n.instance === selectedNode)
+    let list =
+      selectedNode === 'all'
+        ? nodes
+        : nodes.filter((n) => n.instance === selectedNode)
     if (search.trim()) {
       const q = search.toLowerCase()
       list = list.filter(
@@ -184,12 +220,25 @@ const ClusterMonitoring: React.FC<Props> = ({
 
   // Aggregates
   const totalCores = nodes.reduce((s, n) => s + (n.cpuCores ?? 0), 0)
-  const totalMemGB = (nodes.reduce((s, n) => s + n.memTotalBytes, 0) / 1073741824).toFixed(1)
-  const totalDiskGB = (nodes.reduce((s, n) => s + n.diskTotalBytes, 0) / 1073741824).toFixed(1)
-  const totalNetBw = nodes.reduce((s, n) => s + n.networkRxBytesPerSec + n.networkTxBytesPerSec, 0)
-  const avgCpu = nodes.length ? nodes.reduce((s, n) => s + n.cpuUsagePercent, 0) / nodes.length : 0
-  const avgMem = nodes.length ? nodes.reduce((s, n) => s + n.memUsagePercent, 0) / nodes.length : 0
-  const avgDisk = nodes.length ? nodes.reduce((s, n) => s + n.diskUsagePercent, 0) / nodes.length : 0
+  const totalMemGB = (
+    nodes.reduce((s, n) => s + n.memTotalBytes, 0) / 1073741824
+  ).toFixed(1)
+  const totalDiskGB = (
+    nodes.reduce((s, n) => s + n.diskTotalBytes, 0) / 1073741824
+  ).toFixed(1)
+  const totalNetBw = nodes.reduce(
+    (s, n) => s + n.networkRxBytesPerSec + n.networkTxBytesPerSec,
+    0
+  )
+  const avgCpu = nodes.length
+    ? nodes.reduce((s, n) => s + n.cpuUsagePercent, 0) / nodes.length
+    : 0
+  const avgMem = nodes.length
+    ? nodes.reduce((s, n) => s + n.memUsagePercent, 0) / nodes.length
+    : 0
+  const avgDisk = nodes.length
+    ? nodes.reduce((s, n) => s + n.diskUsagePercent, 0) / nodes.length
+    : 0
 
   return (
     <div className="flex flex-col gap-4">
@@ -200,7 +249,7 @@ const ClusterMonitoring: React.FC<Props> = ({
           <select
             value={selectedNode}
             onChange={(e) => setSelectedNode(e.target.value)}
-            className="h-8 w-44 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+            className="border-input bg-background focus:ring-ring h-8 w-44 rounded-md border px-2 text-xs focus:ring-1 focus:outline-none"
           >
             <option value="all">All Nodes</option>
             {nodes.map((n) => (
@@ -214,20 +263,34 @@ const ClusterMonitoring: React.FC<Props> = ({
         {/* Search + actions */}
         <div className="flex items-center gap-2">
           <div className="relative">
-            <Search size={12} className="text-muted-foreground absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search
+              size={12}
+              className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2"
+            />
             <input
               type="text"
               placeholder="Search…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="h-8 w-40 rounded-md border border-input bg-background pl-7 pr-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              className="border-input bg-background focus:ring-ring h-8 w-40 rounded-md border pr-2 pl-7 text-xs focus:ring-1 focus:outline-none"
             />
           </div>
-          <Button variant="outline" size="sm" onClick={onRefresh} disabled={isFetching} className="h-8 text-xs gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={isFetching}
+            className="h-8 gap-1.5 text-xs"
+          >
             <RefreshCw size={12} className={isFetching ? 'animate-spin' : ''} />
             Refresh
           </Button>
-          <Button variant="outline" size="sm" onClick={() => exportCSV(filtered, view)} className="h-8 text-xs gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportCSV(filtered, view)}
+            className="h-8 gap-1.5 text-xs"
+          >
             <Download size={12} />
             Download
           </Button>
@@ -274,7 +337,7 @@ const ClusterMonitoring: React.FC<Props> = ({
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr>
-                    <th className="bg-slate-50 border-b border-r border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 w-44">
+                    <th className="w-44 border-r border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700">
                       Device
                     </th>
                     <ColHeader
@@ -322,7 +385,7 @@ const ClusterMonitoring: React.FC<Props> = ({
                         return (
                           <tr
                             key={n.instance}
-                            className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                            className="border-b border-slate-100 transition-colors hover:bg-slate-50"
                           >
                             {/* Device */}
                             <td className="border-r border-slate-100 px-4 py-3">
@@ -332,8 +395,13 @@ const ClusterMonitoring: React.FC<Props> = ({
                                   <p className="text-xs font-semibold text-slate-700">
                                     {n.hostname || n.name}
                                   </p>
-                                  <p className="text-[10px] text-slate-400">{n.instance}</p>
-                                  <Badge variant="outline" className="mt-0.5 h-4 px-1 text-[9px]">
+                                  <p className="text-[10px] text-slate-400">
+                                    {n.instance}
+                                  </p>
+                                  <Badge
+                                    variant="outline"
+                                    className="mt-0.5 h-4 px-1 text-[9px]"
+                                  >
                                     {n.os}
                                   </Badge>
                                 </div>
@@ -343,14 +411,25 @@ const ClusterMonitoring: React.FC<Props> = ({
                             <td className="border-r border-slate-100 px-4 py-3">
                               <div className="flex items-center gap-1.5">
                                 <StatusIcon pct={n.cpuUsagePercent} />
-                                <div className="flex-1 min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <div className="flex justify-between">
-                                    <span className="text-xs text-slate-600">{n.cpuUsagePercent.toFixed(1)}%</span>
-                                    <span className={cn('text-[11px] font-semibold', cpuH.cls)}>{cpuH.text}</span>
+                                    <span className="text-xs text-slate-600">
+                                      {n.cpuUsagePercent.toFixed(1)}%
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        'text-[11px] font-semibold',
+                                        cpuH.cls
+                                      )}
+                                    >
+                                      {cpuH.text}
+                                    </span>
                                   </div>
                                   <MiniBar pct={n.cpuUsagePercent} />
                                   {n.cpuCores > 0 && (
-                                    <span className="text-[10px] text-slate-400">{n.cpuCores} cores</span>
+                                    <span className="text-[10px] text-slate-400">
+                                      {n.cpuCores} cores
+                                    </span>
                                   )}
                                 </div>
                               </div>
@@ -359,14 +438,24 @@ const ClusterMonitoring: React.FC<Props> = ({
                             <td className="border-r border-slate-100 px-4 py-3">
                               <div className="flex items-center gap-1.5">
                                 <StatusIcon pct={n.memUsagePercent} />
-                                <div className="flex-1 min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <div className="flex justify-between">
-                                    <span className="text-xs text-slate-600">{n.memUsagePercent.toFixed(1)}%</span>
-                                    <span className={cn('text-[11px] font-semibold', memH.cls)}>{memH.text}</span>
+                                    <span className="text-xs text-slate-600">
+                                      {n.memUsagePercent.toFixed(1)}%
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        'text-[11px] font-semibold',
+                                        memH.cls
+                                      )}
+                                    >
+                                      {memH.text}
+                                    </span>
                                   </div>
                                   <MiniBar pct={n.memUsagePercent} />
                                   <span className="text-[10px] text-slate-400">
-                                    {fmtBytes(n.memUsedBytes)} / {fmtBytes(n.memTotalBytes)}
+                                    {fmtBytes(n.memUsedBytes)} /{' '}
+                                    {fmtBytes(n.memTotalBytes)}
                                   </span>
                                 </div>
                               </div>
@@ -375,14 +464,24 @@ const ClusterMonitoring: React.FC<Props> = ({
                             <td className="border-r border-slate-100 px-4 py-3">
                               <div className="flex items-center gap-1.5">
                                 <StatusIcon pct={n.diskUsagePercent} />
-                                <div className="flex-1 min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <div className="flex justify-between">
-                                    <span className="text-xs text-slate-600">{n.diskUsagePercent.toFixed(1)}%</span>
-                                    <span className={cn('text-[11px] font-semibold', diskH.cls)}>{diskH.text}</span>
+                                    <span className="text-xs text-slate-600">
+                                      {n.diskUsagePercent.toFixed(1)}%
+                                    </span>
+                                    <span
+                                      className={cn(
+                                        'text-[11px] font-semibold',
+                                        diskH.cls
+                                      )}
+                                    >
+                                      {diskH.text}
+                                    </span>
                                   </div>
                                   <MiniBar pct={n.diskUsagePercent} />
                                   <span className="text-[10px] text-slate-400">
-                                    {fmtBytes(n.diskUsedBytes)} / {fmtBytes(n.diskTotalBytes)}
+                                    {fmtBytes(n.diskUsedBytes)} /{' '}
+                                    {fmtBytes(n.diskTotalBytes)}
                                   </span>
                                 </div>
                               </div>
@@ -390,11 +489,20 @@ const ClusterMonitoring: React.FC<Props> = ({
                             {/* Network */}
                             <td className="border-r border-slate-100 px-4 py-3">
                               <div className="flex items-center gap-1.5">
-                                <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
+                                <CheckCircle2
+                                  size={13}
+                                  className="shrink-0 text-emerald-500"
+                                />
                                 <div>
-                                  <p className="text-[11px] font-semibold text-emerald-600">Connected</p>
-                                  <p className="text-[10px] text-slate-400">↓ {fmtSpeed(n.networkRxBytesPerSec)}</p>
-                                  <p className="text-[10px] text-slate-400">↑ {fmtSpeed(n.networkTxBytesPerSec)}</p>
+                                  <p className="text-[11px] font-semibold text-emerald-600">
+                                    Connected
+                                  </p>
+                                  <p className="text-[10px] text-slate-400">
+                                    ↓ {fmtSpeed(n.networkRxBytesPerSec)}
+                                  </p>
+                                  <p className="text-[10px] text-slate-400">
+                                    ↑ {fmtSpeed(n.networkTxBytesPerSec)}
+                                  </p>
                                 </div>
                               </div>
                             </td>
@@ -404,14 +512,22 @@ const ClusterMonitoring: React.FC<Props> = ({
                                 <div className="flex items-center gap-1.5">
                                   <Thermometer
                                     size={13}
-                                    className={n.tempCelsius > 80 ? 'text-red-500' : n.tempCelsius > 60 ? 'text-amber-500' : 'text-emerald-500'}
+                                    className={
+                                      n.tempCelsius > 80
+                                        ? 'text-red-500'
+                                        : n.tempCelsius > 60
+                                          ? 'text-amber-500'
+                                          : 'text-emerald-500'
+                                    }
                                   />
                                   <span className="text-xs font-semibold">
                                     {n.tempCelsius.toFixed(0)}°C
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-[11px] text-slate-400">N/A</span>
+                                <span className="text-[11px] text-slate-400">
+                                  N/A
+                                </span>
                               )}
                             </td>
                           </tr>
@@ -419,7 +535,10 @@ const ClusterMonitoring: React.FC<Props> = ({
                       })}
                   {!isLoading && filtered.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-10 text-center text-sm text-slate-400">
+                      <td
+                        colSpan={6}
+                        className="py-10 text-center text-sm text-slate-400"
+                      >
                         No nodes match the filter.
                       </td>
                     </tr>
@@ -441,7 +560,7 @@ const ClusterMonitoring: React.FC<Props> = ({
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr>
-                    <th className="bg-slate-50 border-b border-r border-slate-200 px-4 py-3 text-left text-sm font-semibold text-slate-700 w-44">
+                    <th className="w-44 border-r border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700">
                       Device
                     </th>
                     <ColHeader
@@ -490,7 +609,7 @@ const ClusterMonitoring: React.FC<Props> = ({
                     : filtered.map((n) => (
                         <tr
                           key={n.instance}
-                          className="border-b border-slate-100 hover:bg-slate-50 transition-colors"
+                          className="border-b border-slate-100 transition-colors hover:bg-slate-50"
                         >
                           {/* Device */}
                           <td className="border-r border-slate-100 px-4 py-3">
@@ -500,7 +619,9 @@ const ClusterMonitoring: React.FC<Props> = ({
                                 <p className="text-xs font-semibold text-slate-700">
                                   {n.hostname || n.name}
                                 </p>
-                                <p className="text-[10px] text-slate-400">{n.instance}</p>
+                                <p className="text-[10px] text-slate-400">
+                                  {n.instance}
+                                </p>
                               </div>
                             </div>
                           </td>
@@ -511,7 +632,9 @@ const ClusterMonitoring: React.FC<Props> = ({
                             </p>
                             <MiniBar pct={n.cpuUsagePercent} />
                             {n.cpuCores > 0 && (
-                              <p className="text-[10px] text-slate-400">{n.cpuCores} cores</p>
+                              <p className="text-[10px] text-slate-400">
+                                {n.cpuCores} cores
+                              </p>
                             )}
                           </td>
                           {/* RAM */}
@@ -521,7 +644,8 @@ const ClusterMonitoring: React.FC<Props> = ({
                             </p>
                             <MiniBar pct={n.memUsagePercent} />
                             <p className="text-[10px] text-slate-400">
-                              {fmtBytes(n.memUsedBytes)} / {fmtBytes(n.memTotalBytes)}
+                              {fmtBytes(n.memUsedBytes)} /{' '}
+                              {fmtBytes(n.memTotalBytes)}
                             </p>
                           </td>
                           {/* Storage */}
@@ -531,37 +655,53 @@ const ClusterMonitoring: React.FC<Props> = ({
                             </p>
                             <MiniBar pct={n.diskUsagePercent} />
                             <p className="text-[10px] text-slate-400">
-                              {fmtBytes(n.diskUsedBytes)} / {fmtBytes(n.diskTotalBytes)}
+                              {fmtBytes(n.diskUsedBytes)} /{' '}
+                              {fmtBytes(n.diskTotalBytes)}
                             </p>
                           </td>
                           {/* Network speed */}
                           <td className="border-r border-slate-100 px-4 py-3">
-                            <p className="text-[11px] text-slate-600">↓ {fmtSpeed(n.networkRxBytesPerSec)}</p>
-                            <p className="text-[11px] text-slate-600">↑ {fmtSpeed(n.networkTxBytesPerSec)}</p>
+                            <p className="text-[11px] text-slate-600">
+                              ↓ {fmtSpeed(n.networkRxBytesPerSec)}
+                            </p>
+                            <p className="text-[11px] text-slate-600">
+                              ↑ {fmtSpeed(n.networkTxBytesPerSec)}
+                            </p>
                           </td>
                           {/* Disk I/O */}
                           <td className="border-r border-slate-100 px-4 py-3">
-                            <p className="text-[11px] text-slate-600">R: {fmtSpeed(n.diskReadBytesPerSec)}</p>
-                            <p className="text-[11px] text-slate-600">W: {fmtSpeed(n.diskWriteBytesPerSec)}</p>
+                            <p className="text-[11px] text-slate-600">
+                              R: {fmtSpeed(n.diskReadBytesPerSec)}
+                            </p>
+                            <p className="text-[11px] text-slate-600">
+                              W: {fmtSpeed(n.diskWriteBytesPerSec)}
+                            </p>
                           </td>
                           {/* Load / Procs */}
                           <td className="px-4 py-3">
                             {n.loadAvg1m != null ? (
                               <p className="text-[11px] text-slate-600">
-                                {n.loadAvg1m.toFixed(2)} · {n.loadAvg5m?.toFixed(2)} · {n.loadAvg15m?.toFixed(2)}
+                                {n.loadAvg1m.toFixed(2)} ·{' '}
+                                {n.loadAvg5m?.toFixed(2)} ·{' '}
+                                {n.loadAvg15m?.toFixed(2)}
                               </p>
                             ) : (
                               <p className="text-[11px] text-slate-400">N/A</p>
                             )}
                             {n.processCount != null && (
-                              <p className="text-[10px] text-slate-400">{n.processCount} procs</p>
+                              <p className="text-[10px] text-slate-400">
+                                {n.processCount} procs
+                              </p>
                             )}
                           </td>
                         </tr>
                       ))}
                   {!isLoading && filtered.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-sm text-slate-400">
+                      <td
+                        colSpan={7}
+                        className="py-10 text-center text-sm text-slate-400"
+                      >
                         No nodes match the filter.
                       </td>
                     </tr>
