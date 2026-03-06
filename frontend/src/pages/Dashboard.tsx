@@ -1,4 +1,4 @@
-import React from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Server,
@@ -6,10 +6,16 @@ import {
   Activity,
   AlertTriangle,
   RefreshCw,
+  Layers,
+  LayoutGrid,
 } from 'lucide-react'
 import { useDashboardData } from '@/queries/useDashboard'
-import HostMachineCard from '@/components/dashboard/HostMachineCard'
-import VMCard from '@/components/dashboard/VMCard'
+import ClusterMonitoring from '@/components/dashboard/ClusterMonitoring'
+import VMMonitoring from '@/components/dashboard/VMMonitoring'
+import { Card, CardContent } from '@/components/ui/card'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 // ─── Summary metric card ──────────────────────────────────────────────────────
 
@@ -17,51 +23,93 @@ interface SummaryCardProps {
   label: string
   value: string | number
   icon: React.ReactNode
-  bgClass: string
-  textClass: string
-  borderClass: string
+  accent?: 'default' | 'success' | 'warn' | 'danger'
+}
+
+const accentMap = {
+  default: 'bg-secondary text-secondary-foreground',
+  success: 'bg-emerald-100 text-emerald-700',
+  warn: 'bg-amber-100 text-amber-700',
+  danger: 'bg-red-100 text-red-600',
 }
 
 const SummaryCard: React.FC<SummaryCardProps> = ({
   label,
   value,
   icon,
-  bgClass,
-  textClass,
-  borderClass,
+  accent = 'default',
 }) => (
   <motion.div
     initial={{ opacity: 0, scale: 0.96 }}
     animate={{ opacity: 1, scale: 1 }}
     transition={{ duration: 0.35 }}
-    className={`flex items-center gap-3 rounded-xl border ${borderClass} ${bgClass} px-4 py-3`}
   >
-    <div
-      className={`flex h-9 w-9 items-center justify-center rounded-lg bg-white/60 ${textClass}`}
-    >
-      {icon}
-    </div>
-    <div>
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className={`text-xl leading-tight font-bold ${textClass}`}>{value}</p>
-    </div>
+    <Card className="gap-0 py-0">
+      <CardContent className="flex items-center gap-3 px-4 py-3">
+        <div
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+            accentMap[accent]
+          )}
+        >
+          {icon}
+        </div>
+        <div>
+          <p className="text-muted-foreground text-xs font-medium">{label}</p>
+          <p className="text-foreground text-xl leading-tight font-bold">
+            {value}
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   </motion.div>
 )
 
-// ─── Skeleton loader ──────────────────────────────────────────────────────────
+// ─── Tab button ───────────────────────────────────────────────────────────────
 
-const CardSkeleton: React.FC<{ className?: string }> = ({ className = '' }) => (
-  <div
-    className={`animate-pulse rounded-xl border border-slate-200 bg-slate-100 ${className}`}
-  />
+interface TabBtnProps {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+  count?: number
+}
+
+const TabBtn: React.FC<TabBtnProps> = ({ active, onClick, icon, label, count }) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      'flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all',
+      active
+        ? 'bg-primary text-primary-foreground shadow-sm'
+        : 'bg-muted text-muted-foreground hover:bg-muted/70'
+    )}
+  >
+    {icon}
+    {label}
+    {count !== undefined && (
+      <span
+        className={cn(
+          'rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none',
+          active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-background text-foreground'
+        )}
+      >
+        {count}
+      </span>
+    )}
+  </button>
 )
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
+type DashTab = 'cluster' | 'vm'
+
 const Dashboard: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<DashTab>('cluster')
+
   const {
-    hosts,
-    vms,
+    linuxNodes,
+    windowsNodes,
     summary,
     isLoading,
     isError,
@@ -78,23 +126,24 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 px-1 pb-10">
-      {/* ── Page title row ── */}
+      {/* ── Page header ── */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Dashboard</h1>
-          <p className="mt-0.5 text-sm text-slate-400">
+          <h1 className="text-foreground text-2xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground mt-0.5 text-sm">
             Live infrastructure overview · auto-refreshes every 30 s
           </p>
         </div>
-
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => refetch()}
           disabled={isFetching}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+          className="gap-1.5 text-xs"
         >
           <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
           {isFetching ? 'Refreshing…' : `Updated ${lastUpdated}`}
-        </button>
+        </Button>
       </div>
 
       {/* ── Summary strip ── */}
@@ -102,50 +151,36 @@ const Dashboard: React.FC = () => {
         <SummaryCard
           label="Host Machines"
           value={summary.totalHosts}
-          icon={<Server size={18} />}
-          bgClass="bg-indigo-50"
-          textClass="text-indigo-600"
-          borderClass="border-indigo-100"
+          icon={<Server size={16} />}
         />
         <SummaryCard
           label="Virtual Machines"
           value={summary.totalVMs}
-          icon={<Monitor size={18} />}
-          bgClass="bg-sky-50"
-          textClass="text-sky-600"
-          borderClass="border-sky-100"
+          icon={<Monitor size={16} />}
         />
         <SummaryCard
           label="Running"
-          value={summary.runningVMs}
-          icon={<Activity size={18} />}
-          bgClass="bg-emerald-50"
-          textClass="text-emerald-600"
-          borderClass="border-emerald-100"
+          value={summary.runningCount}
+          icon={<Activity size={16} />}
+          accent="success"
         />
         <SummaryCard
           label="Unreachable"
-          value={summary.unreachableVMs}
-          icon={<AlertTriangle size={18} />}
-          bgClass="bg-red-50"
-          textClass="text-red-500"
-          borderClass="border-red-100"
+          value={summary.unreachableCount}
+          icon={<AlertTriangle size={16} />}
+          accent={summary.unreachableCount > 0 ? 'danger' : 'default'}
         />
         <SummaryCard
           label="Avg CPU"
           value={`${summary.avgCpuPercent.toFixed(1)}%`}
-          icon={<Activity size={18} />}
-          bgClass="bg-amber-50"
-          textClass="text-amber-600"
-          borderClass="border-amber-100"
+          icon={<Activity size={16} />}
+          accent={summary.avgCpuPercent >= 85 ? 'warn' : 'default'}
         />
         <SummaryCard
           label="Avg Memory"
           value={`${summary.avgMemPercent.toFixed(1)}%`}
-          icon={<Activity size={18} />}
-          bgClass="bg-purple-50"
-          textClass="text-purple-600"
-          borderClass="border-purple-100"
+          icon={<Activity size={16} />}
+          accent={summary.avgMemPercent >= 85 ? 'warn' : 'default'}
         />
       </div>
 
@@ -154,102 +189,59 @@ const Dashboard: React.FC = () => {
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3"
         >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
-          <div>
-            <p className="text-sm font-semibold text-red-700">
-              Could not reach Prometheus
-            </p>
-            <p className="mt-0.5 text-xs text-red-500">
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Could not reach backend</AlertTitle>
+            <AlertDescription>
               {(error as Error)?.message ??
-                'Check that Prometheus is running and VITE_PROMETHEUS_URL is set correctly.'}
-            </p>
-          </div>
+                'Check that the backend is running and VITE_API_BASE_URL is set correctly.'}
+            </AlertDescription>
+          </Alert>
         </motion.div>
       )}
 
-      {/* ── Host Machines section ── */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <Server size={16} className="text-indigo-500" />
-          <h2 className="text-base font-semibold text-slate-700">
-            Host Machines
-          </h2>
-          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-500">
-            {isLoading ? '…' : hosts.length}
-          </span>
-        </div>
+      {/* ── Mode tabs ── */}
+      <div className="flex gap-2">
+        <TabBtn
+          active={activeTab === 'cluster'}
+          onClick={() => setActiveTab('cluster')}
+          icon={<Layers size={14} />}
+          label="Cluster Monitoring"
+          count={summary.linuxCount}
+        />
+        <TabBtn
+          active={activeTab === 'vm'}
+          onClick={() => setActiveTab('vm')}
+          icon={<LayoutGrid size={14} />}
+          label="VM Monitoring"
+          count={summary.windowsCount}
+        />
+      </div>
 
-        {isLoading ? (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {[1, 2].map((k) => (
-              <CardSkeleton key={k} className="h-64" />
-            ))}
-          </div>
-        ) : hosts.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
-            <Server className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-            <p className="text-sm font-medium text-slate-500">
-              No host machines found
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Make sure your scrape targets have{' '}
-              <code className="rounded bg-slate-100 px-1 text-[11px]">
-                role="host"
-              </code>{' '}
-              label in Prometheus.
-            </p>
-          </div>
+      {/* ── Tab content ── */}
+      <motion.div
+        key={activeTab}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.25 }}
+      >
+        {activeTab === 'cluster' ? (
+          <ClusterMonitoring
+            nodes={linuxNodes}
+            isLoading={isLoading}
+            isFetching={isFetching}
+            onRefresh={refetch}
+          />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {hosts.map((host) => (
-              <HostMachineCard key={host.instance} host={host} />
-            ))}
-          </div>
+          <VMMonitoring
+            vms={windowsNodes}
+            isLoading={isLoading}
+            isFetching={isFetching}
+            onRefresh={refetch}
+          />
         )}
-      </section>
-
-      {/* ── Virtual Machines section ── */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <Monitor size={16} className="text-sky-500" />
-          <h2 className="text-base font-semibold text-slate-700">
-            Virtual Machines
-          </h2>
-          <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-semibold text-sky-500">
-            {isLoading ? '…' : vms.length}
-          </span>
-        </div>
-
-        {isLoading ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {[1, 2, 3, 4].map((k) => (
-              <CardSkeleton key={k} className="h-44" />
-            ))}
-          </div>
-        ) : vms.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
-            <Monitor className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-            <p className="text-sm font-medium text-slate-500">
-              No virtual machines found
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Targets with{' '}
-              <code className="rounded bg-slate-100 px-1 text-[11px]">
-                role="vm"
-              </code>{' '}
-              label will appear here.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {vms.map((vm, i) => (
-              <VMCard key={vm.instance} vm={vm} index={i} />
-            ))}
-          </div>
-        )}
-      </section>
+      </motion.div>
     </div>
   )
 }

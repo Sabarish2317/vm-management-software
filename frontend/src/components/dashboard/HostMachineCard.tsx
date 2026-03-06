@@ -1,7 +1,28 @@
-import React from 'react'
 import { motion } from 'framer-motion'
-import { Server, Cpu, MemoryStick, HardDrive, Network } from 'lucide-react'
+import {
+  Server,
+  Cpu,
+  MemoryStick,
+  HardDrive,
+  Network,
+  Clock,
+  Thermometer,
+  Activity,
+  Layers,
+  Gpu,
+} from 'lucide-react'
 import type { NodeMetrics, VMStatus } from '@/types/prometheus'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { Separator } from '@/components/ui/separator'
+import { cn } from '@/lib/utils'
 
 // ─── tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -23,28 +44,12 @@ function fmtUptime(seconds: number): string {
 
 // ─── sub-components ───────────────────────────────────────────────────────────
 
-interface GaugeBarProps {
-  value: number
-  colorClass: string
-}
-
-const GaugeBar: React.FC<GaugeBarProps> = ({ value, colorClass }) => (
-  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-    <motion.div
-      className={`h-full rounded-full ${colorClass}`}
-      initial={{ width: 0 }}
-      animate={{ width: `${Math.min(100, value)}%` }}
-      transition={{ duration: 0.6, ease: 'easeOut' }}
-    />
-  </div>
-)
-
 interface StatRowProps {
   icon: React.ReactNode
   label: string
   value: string
   pct?: number
-  colorClass?: string
+  danger?: boolean
 }
 
 const StatRow: React.FC<StatRowProps> = ({
@@ -52,54 +57,50 @@ const StatRow: React.FC<StatRowProps> = ({
   label,
   value,
   pct,
-  colorClass = 'bg-blue-500',
+  danger,
 }) => (
-  <div className="flex flex-col gap-0.5">
+  <div className="flex flex-col gap-1.5">
     <div className="flex items-center justify-between">
-      <div className="flex items-center gap-2 text-slate-500">
-        <span className="flex h-5 w-5 items-center justify-center text-slate-400">
-          {icon}
-        </span>
+      <div className="text-muted-foreground flex items-center gap-2">
+        <span className="text-muted-foreground/70">{icon}</span>
         <span className="text-xs font-medium">{label}</span>
       </div>
-      <span className="text-xs font-semibold text-slate-700">{value}</span>
+      <span
+        className={cn(
+          'text-xs font-semibold',
+          danger ? 'text-destructive' : 'text-foreground'
+        )}
+      >
+        {value}
+      </span>
     </div>
-    {pct !== undefined && <GaugeBar value={pct} colorClass={colorClass} />}
+    {pct !== undefined && (
+      <Progress
+        value={pct}
+        className={cn(
+          'h-1.5',
+          danger && '[&>[data-slot=progress-indicator]]:bg-destructive'
+        )}
+      />
+    )}
   </div>
 )
 
-// ─── status badge ─────────────────────────────────────────────────────────────
+// ─── status config ───────────────────────────────────────────────────────────
+
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'
 
 const statusConfig: Record<
   VMStatus,
-  { bg: string; text: string; dot: string; label: string }
+  { variant: BadgeVariant; label: string; dot: string }
 > = {
-  running: {
-    bg: 'bg-green-50',
-    text: 'text-green-600',
-    dot: 'bg-green-500',
-    label: 'Online',
-  },
-  degraded: {
-    bg: 'bg-amber-50',
-    text: 'text-amber-600',
-    dot: 'bg-amber-500',
-    label: 'Degraded',
-  },
-  unreachable: {
-    bg: 'bg-red-50',
-    text: 'text-red-600',
-    dot: 'bg-red-500',
-    label: 'Unreachable',
-  },
+  running: { variant: 'default', label: 'Online', dot: 'bg-green-400' },
+  degraded: { variant: 'outline', label: 'Degraded', dot: 'bg-amber-400' },
+  unreachable: { variant: 'destructive', label: 'Unreachable', dot: '' },
 }
 
-// ─── gauge colour based on usage ─────────────────────────────────────────────
-
-function gaugeColor(pct: number): string {
-  if (pct >= 85) return 'bg-red-500'
-  if (pct >= 65) return 'bg-amber-400'
-  return 'bg-blue-500'
+function isDanger(pct: number): boolean {
+  return pct >= 85
 }
 
 // ─── HostMachineCard ──────────────────────────────────────────────────────────
@@ -116,75 +117,126 @@ const HostMachineCard: React.FC<HostMachineCardProps> = ({ host }) => {
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
-      className="flex w-full flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
     >
-      {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-100 bg-slate-50">
-            <Server className="h-5 w-5 text-slate-500" />
+      <Card className="gap-0 py-0 transition-shadow hover:shadow-md">
+        <CardHeader className="border-b px-5 py-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="bg-muted flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border">
+                <Server className="text-muted-foreground h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <CardTitle className="truncate text-sm">{host.name}</CardTitle>
+                {host.hostname && host.hostname !== host.name && (
+                  <p className="truncate text-[11px] font-medium text-slate-500">
+                    {host.hostname}
+                  </p>
+                )}
+                <CardDescription className="mt-0.5 truncate text-xs">
+                  {host.instance}
+                </CardDescription>
+              </div>
+            </div>
+
+            <Badge variant={s.variant} className="shrink-0">
+              {s.dot && (
+                <span className={cn('mr-1 h-1.5 w-1.5 rounded-full', s.dot)} />
+              )}
+              {s.label}
+            </Badge>
           </div>
-          <div>
-            <h3 className="text-base leading-tight font-semibold text-slate-800">
-              {host.name}
-            </h3>
-            <p className="mt-0.5 text-xs text-slate-400">{host.instance}</p>
+
+          <div className="mt-3 flex items-center justify-between">
+            <Badge
+              variant="outline"
+              className="text-xs tracking-wide uppercase"
+            >
+              Host Machine
+            </Badge>
+            <span className="text-muted-foreground flex items-center gap-1 text-xs">
+              <Clock size={11} />
+              {host.uptimeSeconds > 0 ? fmtUptime(host.uptimeSeconds) : '—'}
+            </span>
           </div>
-        </div>
+        </CardHeader>
 
-        {/* Status badge */}
-        <span
-          className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${s.bg} ${s.text}`}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
-          {s.label}
-        </span>
-      </div>
-
-      {/* ── Role tag + uptime ── */}
-      <div className="flex items-center justify-between">
-        <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-medium tracking-wide text-indigo-600 uppercase">
-          Host Machine
-        </span>
-        <span className="text-xs text-slate-400">
-          Uptime&nbsp;
-          <span className="font-medium text-slate-600">
-            {host.uptimeSeconds > 0 ? fmtUptime(host.uptimeSeconds) : '—'}
-          </span>
-        </span>
-      </div>
-
-      <hr className="border-slate-100" />
-
-      {/* ── Metrics ── */}
-      <div className="flex flex-col gap-3">
-        <StatRow
-          icon={<Cpu size={14} />}
-          label="CPU Usage"
-          value={`${host.cpuUsagePercent.toFixed(1)}%`}
-          pct={host.cpuUsagePercent}
-          colorClass={gaugeColor(host.cpuUsagePercent)}
-        />
-        <StatRow
-          icon={<MemoryStick size={14} />}
-          label="Memory"
-          value={`${fmtBytes(host.memUsedBytes)} / ${fmtBytes(host.memTotalBytes)}`}
-          pct={host.memUsagePercent}
-          colorClass={gaugeColor(host.memUsagePercent)}
-        />
-        <StatRow
-          icon={<HardDrive size={14} />}
-          label="Disk"
-          value={`${fmtBytes(host.diskUsedBytes)} / ${fmtBytes(host.diskTotalBytes)}`}
-          pct={host.diskUsagePercent}
-          colorClass={gaugeColor(host.diskUsagePercent)}
-        />
-        <StatRow
-          icon={<Network size={14} />}
-          label="Network I/O"
-          value={`↓ ${fmtBytes(host.networkRxBytesPerSec)}/s  ↑ ${fmtBytes(host.networkTxBytesPerSec)}/s`}
-        />
-      </div>
+        <CardContent className="flex flex-col gap-3 px-5 py-4">
+          <StatRow
+            icon={<Cpu size={13} />}
+            label={host.cpuCores > 0 ? `CPU (${host.cpuCores} cores)` : 'CPU'}
+            value={`${host.cpuUsagePercent.toFixed(1)}%`}
+            pct={host.cpuUsagePercent}
+            danger={isDanger(host.cpuUsagePercent)}
+          />
+          {host.loadAvg1m != null && (
+            <>
+              <StatRow
+                icon={<Activity size={13} />}
+                label="Load avg (1m / 5m / 15m)"
+                value={`${host.loadAvg1m.toFixed(2)} / ${host.loadAvg5m?.toFixed(2) ?? '—'} / ${host.loadAvg15m?.toFixed(2) ?? '—'}`}
+              />
+            </>
+          )}
+          <Separator />
+          <StatRow
+            icon={<MemoryStick size={13} />}
+            label="Memory"
+            value={`${fmtBytes(host.memUsedBytes)} / ${fmtBytes(host.memTotalBytes)}`}
+            pct={host.memUsagePercent}
+            danger={isDanger(host.memUsagePercent)}
+          />
+          <Separator />
+          <StatRow
+            icon={<HardDrive size={13} />}
+            label="Disk"
+            value={`${fmtBytes(host.diskUsedBytes)} / ${fmtBytes(host.diskTotalBytes)}`}
+            pct={host.diskUsagePercent}
+            danger={isDanger(host.diskUsagePercent)}
+          />
+          <StatRow
+            icon={<Layers size={13} />}
+            label="Disk I/O"
+            value={`R: ${fmtBytes(host.diskReadBytesPerSec)}/s  W: ${fmtBytes(host.diskWriteBytesPerSec)}/s`}
+          />
+          <Separator />
+          <StatRow
+            icon={<Network size={13} />}
+            label="Network I/O"
+            value={`↓${fmtBytes(host.networkRxBytesPerSec)}/s  ↑${fmtBytes(host.networkTxBytesPerSec)}/s`}
+          />
+          <Separator />
+          {host.tempCelsius != null && (
+            <>
+              <StatRow
+                icon={<Thermometer size={13} />}
+                label="Temperature"
+                value={`${host.tempCelsius.toFixed(1)} °C`}
+                danger={host.tempCelsius > 80}
+              />
+              <Separator />
+            </>
+          )}
+          {host.processCount != null && (
+            <StatRow
+              icon={<Activity size={13} />}
+              label="Processes"
+              value={String(host.processCount)}
+            />
+          )}
+          <Separator />
+          <StatRow
+            icon={<Gpu size={13} />}
+            label="GPU VRAM"
+            value={
+              host.vramTotalBytes != null && host.vramUsedBytes != null
+                ? `${fmtBytes(host.vramUsedBytes)} / ${fmtBytes(host.vramTotalBytes)}`
+                : 'N/A'
+            }
+            pct={host.vramUsagePercent ?? undefined}
+            danger={(host.vramUsagePercent ?? 0) >= 85}
+          />
+        </CardContent>
+      </Card>
     </motion.div>
   )
 }

@@ -26,21 +26,28 @@ export function useDashboardData() {
 
   const hosts = useMemo<NodeMetrics[]>(() => {
     if (!query.data) return []
-    // "host" role first, then fall back: any single node when there is no "vm"
-    const h = query.data.filter((n) => n.role === 'host')
-    return h.length > 0 ? h : []
+    return query.data.filter((n) => n.role === 'host')
   }, [query.data])
 
   const vms = useMemo<NodeMetrics[]>(() => {
     if (!query.data) return []
-    const v = query.data.filter((n) => n.role === 'vm')
-    // If there is no explicit role, show everything that isn't marked "host"
-    return v.length > 0 ? v : query.data.filter((n) => n.role !== 'host')
+    return query.data.filter((n) => n.role !== 'host')
+  }, [query.data])
+
+  const linuxNodes = useMemo<NodeMetrics[]>(() => {
+    if (!query.data) return []
+    return query.data.filter((n) => n.os === 'linux')
+  }, [query.data])
+
+  const windowsNodes = useMemo<NodeMetrics[]>(() => {
+    if (!query.data) return []
+    return query.data.filter((n) => n.os === 'windows')
   }, [query.data])
 
   const summary = useMemo<DashboardSummary>(() => {
     const all = query.data ?? []
     const running = all.filter((n) => n.status === 'running').length
+    const degraded = all.filter((n) => n.status === 'degraded').length
     const unreachable = all.filter((n) => n.status === 'unreachable').length
     const avgCpu =
       all.length > 0
@@ -50,21 +57,38 @@ export function useDashboardData() {
       all.length > 0
         ? all.reduce((s, n) => s + n.memUsagePercent, 0) / all.length
         : 0
+    const avgDisk =
+      all.length > 0
+        ? all.reduce((s, n) => s + n.diskUsagePercent, 0) / all.length
+        : 0
 
     return {
+      totalNodes: all.length,
       totalHosts: hosts.length,
       totalVMs: vms.length,
-      runningVMs: running,
-      unreachableVMs: unreachable,
+      runningCount: running,
+      degradedCount: degraded,
+      unreachableCount: unreachable,
       avgCpuPercent: avgCpu,
       avgMemPercent: avgMem,
+      avgDiskPercent: avgDisk,
+      linuxCount: linuxNodes.length,
+      windowsCount: windowsNodes.length,
     }
-  }, [query.data, hosts.length, vms.length])
+  }, [
+    query.data,
+    hosts.length,
+    vms.length,
+    linuxNodes.length,
+    windowsNodes.length,
+  ])
 
   return {
     ...query,
     hosts,
     vms,
+    linuxNodes,
+    windowsNodes,
     summary,
   }
 }

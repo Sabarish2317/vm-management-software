@@ -1,164 +1,95 @@
 /**
  * prometheusService.ts
  *
- * All Prometheus HTTP API calls.
- * Prometheus base URL is read from VITE_PROMETHEUS_URL (default: http://localhost:9090).
+ * Calls the VM-Management backend API (Express bridge) which in turn
+ * queries Prometheus over Tailscale. The frontend never talks to
+ * Prometheus directly.
  *
- * Assumptions:
- *   - Each target is scraped by node_exporter.
- *   - A "role" label is set in your scrape_config to "host" or "vm".
- *     If not set, instances are treated as "unknown" and still displayed.
- *   - CPU rate is calculated using a 2-minute range vector.
+ * Backend base URL: VITE_API_BASE_URL (default: http://localhost:3001)
  */
 
 import axios from 'axios'
-import type {
-  NodeMetrics,
-  PrometheusResponse,
-  PrometheusVectorResult,
-  VMStatus,
-} from '@/types/prometheus'
+import type { NodeMetrics, DashboardSummary } from '@/types/prometheus'
 
-const PROMETHEUS_BASE =
-  import.meta.env.VITE_PROMETHEUS_URL ?? 'http://localhost:9090'
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+const api = axios.create({ baseURL: API_BASE })
 
-const api = axios.create({ baseURL: PROMETHEUS_BASE })
+// ─── response envelope from the backend ──────────────────────────────────────
 
-async function query(promql: string): Promise<PrometheusVectorResult[]> {
-  const { data } = await api.get<PrometheusResponse>('/api/v1/query', {
-    params: { query: promql },
-  })
-  if (data.status !== 'success') {
-    throw new Error(`Prometheus error: ${data.error ?? 'unknown'}`)
-  }
-  return data.data.result
+interface ApiResponse<T> {
+  success: boolean
+  total?: number
+  data: T
+  warnings?: string[]
+  error?: string
 }
 
-function val(result: PrometheusVectorResult): number {
-  return parseFloat(result.value[1]) || 0
-}
+// ─── exports ─────────────────────────────────────────────────────────────────
 
-/** Build a lookup map keyed by instance label */
-function toMap(results: PrometheusVectorResult[]): Map<string, number> {
-  return new Map(results.map((r) => [r.metric.instance ?? '', val(r)]))
-}
-
-function pct(used: number, total: number): number {
-  if (!total) return 0
-  return Math.min(100, (used / total) * 100)
-}
-
-function statusFromMetrics(up: boolean, cpu: number, mem: number): VMStatus {
-  if (!up) return 'unreachable'
-  if (cpu > 90 || mem > 90) return 'degraded'
-  return 'running'
-}
-
-// ─── main export ─────────────────────────────────────────────────────────────
-
+/**
+ * Fetch all node metrics (Linux + Windows) from the backend.
+ * Maps to GET /api/metrics/all
+ */
 export async function fetchAllNodeMetrics(): Promise<NodeMetrics[]> {
-  // Fire all Prometheus queries in parallel
-  const [
-    upResults,
-    cpuResults,
-    memTotalResults,
-    memAvailResults,
-    diskTotalResults,
-    diskAvailResults,
-    netRxResults,
-    netTxResults,
-    uptimeResults,
-  ] = await Promise.all([
-    // 1. Is the node up?
-    query('up{job=~"node_exporter|node"}'),
+  const { data } = await api.get<ApiResponse<NodeMetrics[]>>('/api/metrics/all')
+  if (!data.success && !data.data?.length) {
+    throw new Error(data.error ?? 'Failed to fetch metrics')
+  }
+  return data.data
+}
 
-    // 2. CPU usage % (1 - idle), averaged across all cores, 2-min rate
-    query(
-      '100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100)'
-    ),
+/**
+ * Fetch only Linux (node_exporter) node metrics.
+ * Maps to GET /api/metrics/nodes
+ */
+export async function fetchLinuxNodeMetrics(): Promise<NodeMetrics[]> {
+  const { data } =
+    await api.get<ApiResponse<NodeMetrics[]>>('/api/metrics/nodes')
+  return data.data
+}
 
-    // 3. Total memory
-    query('node_memory_MemTotal_bytes'),
+/**
+ * Fetch only Windows VM metrics.
+ * Maps to GET /api/metrics/windows-vms
+ */
+export async function fetchWindowsVMMetrics(): Promise<NodeMetrics[]> {
+  const { data } = await api.get<ApiResponse<NodeMetrics[]>>(
+    '/api/metrics/windows-vms'
+  )
+  return data.data
+}
 
-    // 4. Available memory
-    query('node_memory_MemAvailable_bytes'),
+/**
+ * Fetch a single instance's metrics.
+ * Maps to GET /api/metrics/:instance
+ */
+export async function fetchInstanceMetrics(
+  instance: string
+): Promise<NodeMetrics> {
+  const { data } = await api.get<ApiResponse<NodeMetrics>>(
+    `/api/metrics/${encodeURIComponent(instance)}`
+  )
+  return data.data
+}
 
-    // 5. Root filesystem total
-    query('node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}'),
+/**
+ * Fetch the dashboard summary (aggregated counts + averages).
+ * Maps to GET /api/dashboard/summary
+ */
+export async function fetchDashboardSummary(): Promise<DashboardSummary> {
+  const { data } = await api.get<ApiResponse<DashboardSummary>>(
+    '/api/dashboard/summary'
+  )
+  return data.data
+}
 
-    // 6. Root filesystem available
-    query(
-      'node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"}'
-    ),
-
-    // 7. Network receive (bytes/sec, 5-min rate, all interfaces summed)
-    query(
-      'sum by (instance) (rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*"}[5m]))'
-    ),
-
-    // 8. Network transmit (bytes/sec, 5-min rate)
-    query(
-      'sum by (instance) (rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*"}[5m]))'
-    ),
-
-    // 9. Uptime
-    query('node_time_seconds - node_boot_time_seconds'),
-  ])
-
-  // Build maps for O(1) lookup
-  const cpuMap = toMap(cpuResults)
-  const memTotalMap = toMap(memTotalResults)
-  const memAvailMap = toMap(memAvailResults)
-  const diskTotalMap = toMap(diskTotalResults)
-  const diskAvailMap = toMap(diskAvailResults)
-  const netRxMap = toMap(netRxResults)
-  const netTxMap = toMap(netTxResults)
-  const uptimeMap = toMap(uptimeResults)
-
-  // Iterate over "up" results – one entry per instance
-  return upResults.map((r) => {
-    const instance = r.metric.instance ?? ''
-    const isUp = val(r) === 1
-
-    const cpu = cpuMap.get(instance) ?? 0
-    const memTotal = memTotalMap.get(instance) ?? 0
-    const memAvail = memAvailMap.get(instance) ?? 0
-    const memUsed = memTotal - memAvail
-    const diskTotal = diskTotalMap.get(instance) ?? 0
-    const diskAvail = diskAvailMap.get(instance) ?? 0
-    const diskUsed = diskTotal - diskAvail
-
-    const role =
-      (r.metric.role as NodeMetrics['role']) ??
-      (r.metric.job === 'host' ? 'host' : 'vm')
-
-    // Derive a friendly name: prefer label "name" or "hostname", fall back to instance
-    const name = r.metric.name ?? r.metric.hostname ?? instance.split(':')[0]
-
-    const status: VMStatus = statusFromMetrics(
-      isUp,
-      cpu,
-      pct(memUsed, memTotal)
-    )
-
-    return {
-      instance,
-      name,
-      up: isUp,
-      cpuUsagePercent: cpu,
-      memTotalBytes: memTotal,
-      memUsedBytes: memUsed,
-      memUsagePercent: pct(memUsed, memTotal),
-      diskTotalBytes: diskTotal,
-      diskUsedBytes: diskUsed,
-      diskUsagePercent: pct(diskUsed, diskTotal),
-      networkRxBytesPerSec: netRxMap.get(instance) ?? 0,
-      networkTxBytesPerSec: netTxMap.get(instance) ?? 0,
-      uptimeSeconds: uptimeMap.get(instance) ?? 0,
-      status,
-      role,
-    } satisfies NodeMetrics
-  })
+/**
+ * Fetch all active scrape targets with health status.
+ * Maps to GET /api/targets
+ */
+export async function fetchTargets(scrapePool?: string) {
+  const params = scrapePool ? { scrapePool } : {}
+  const { data } = await api.get('/api/targets', { params })
+  return data.data
 }

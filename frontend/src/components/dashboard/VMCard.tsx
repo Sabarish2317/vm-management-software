@@ -1,7 +1,26 @@
-import React from 'react'
 import { motion } from 'framer-motion'
-import { Monitor, Cpu, HardDrive, MemoryStick, Network } from 'lucide-react'
+import {
+  Monitor,
+  Server,
+  Cpu,
+  HardDrive,
+  MemoryStick,
+  Network,
+  Thermometer,
+  Layers,
+  Gpu,
+} from 'lucide-react'
 import type { NodeMetrics, VMStatus } from '@/types/prometheus'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
+import { cn } from '@/lib/utils'
 
 // ─── helpers (duplicated small-utility; keep components self-contained) ───────
 
@@ -18,29 +37,21 @@ function gaugeColor(pct: number): string {
   return 'bg-emerald-500'
 }
 
-// ─── mini gauge bar ───────────────────────────────────────────────────────────
-
-interface MiniGaugeProps {
-  value: number
-  colorClass: string
-}
-
-const MiniGauge: React.FC<MiniGaugeProps> = ({ value, colorClass }) => (
-  <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-slate-100">
-    <motion.div
-      className={`h-full rounded-full ${colorClass}`}
-      initial={{ width: 0 }}
-      animate={{ width: `${Math.min(100, value)}%` }}
-      transition={{ duration: 0.55, ease: 'easeOut' }}
-    />
-  </div>
-)
-
 // ─── status config ────────────────────────────────────────────────────────────
+
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'
 
 const statusConfig: Record<
   VMStatus,
-  { bg: string; text: string; dot: string; label: string; border: string }
+  {
+    bg: string
+    text: string
+    dot: string
+    label: string
+    border: string
+    variant: BadgeVariant
+    iconClass: string
+  }
 > = {
   running: {
     bg: 'bg-emerald-50',
@@ -48,6 +59,8 @@ const statusConfig: Record<
     dot: 'bg-emerald-500',
     label: 'Running',
     border: 'border-slate-200',
+    variant: 'default',
+    iconClass: 'text-emerald-600',
   },
   degraded: {
     bg: 'bg-amber-50',
@@ -55,6 +68,8 @@ const statusConfig: Record<
     dot: 'bg-amber-500',
     label: 'Degraded',
     border: 'border-amber-200',
+    variant: 'outline',
+    iconClass: 'text-amber-600',
   },
   unreachable: {
     bg: 'bg-red-50',
@@ -62,6 +77,8 @@ const statusConfig: Record<
     dot: 'bg-red-500',
     label: 'Unreachable',
     border: 'border-red-200',
+    variant: 'destructive',
+    iconClass: 'text-red-500',
   },
 }
 
@@ -74,118 +91,169 @@ interface VMCardProps {
 
 const VMCard: React.FC<VMCardProps> = ({ vm, index = 0 }) => {
   const s = statusConfig[vm.status]
+  const OsIcon = vm.os === 'windows' ? Monitor : Server
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.06 }}
-      className={`flex flex-col gap-3 rounded-xl border ${s.border} bg-white p-4 shadow-sm transition-shadow hover:shadow-md`}
     >
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2.5 overflow-hidden">
-          <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${s.bg}`}
-          >
-            <Monitor className={`h-4 w-4 ${s.text}`} />
+      <Card className="gap-0 py-0 transition-shadow hover:shadow-md">
+        <CardHeader className="flex-row items-center justify-between gap-2 border-b px-4 py-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="bg-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border">
+              <OsIcon className={cn('h-4 w-4', s.iconClass)} />
+            </div>
+            <div className="min-w-0">
+              <CardTitle className="truncate text-sm">{vm.name}</CardTitle>
+              {vm.hostname && vm.hostname !== vm.name && (
+                <p className="truncate text-[10px] font-medium text-slate-500">
+                  {vm.hostname}
+                </p>
+              )}
+              <CardDescription className="truncate text-xs">
+                {vm.instance}
+              </CardDescription>
+            </div>
           </div>
-          <div className="overflow-hidden">
-            <p className="truncate text-sm leading-tight font-semibold text-slate-800">
-              {vm.name}
+          <div className="flex shrink-0 flex-col items-end gap-1">
+            <Badge variant={s.variant} className="text-xs">
+              {s.dot && (
+                <span className={cn('mr-1 h-1.5 w-1.5 rounded-full', s.dot)} />
+              )}
+              {s.label}
+            </Badge>
+            <Badge variant="outline" className="h-4 px-1 text-[9px]">
+              {vm.os}
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <CardContent className="px-4 py-3">
+          {vm.up ? (
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              {/* CPU */}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                    <Cpu size={10} /> CPU
+                  </span>
+                  <span className="text-[11px] font-semibold">
+                    {vm.cpuUsagePercent.toFixed(1)}%
+                  </span>
+                </div>
+                <Progress
+                  value={vm.cpuUsagePercent}
+                  className={cn('h-1', gaugeColor(vm.cpuUsagePercent))}
+                />
+              </div>
+              {/* RAM */}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                    <MemoryStick size={10} /> RAM
+                  </span>
+                  <span className="text-[11px] font-semibold">
+                    {vm.memUsagePercent.toFixed(1)}%
+                  </span>
+                </div>
+                <Progress
+                  value={vm.memUsagePercent}
+                  className={cn('h-1', gaugeColor(vm.memUsagePercent))}
+                />
+              </div>
+              {/* Disk */}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                    <HardDrive size={10} /> Disk
+                  </span>
+                  <span className="text-[11px] font-semibold">
+                    {vm.diskUsagePercent.toFixed(1)}%
+                  </span>
+                </div>
+                <Progress
+                  value={vm.diskUsagePercent}
+                  className={cn('h-1', gaugeColor(vm.diskUsagePercent))}
+                />
+              </div>
+              {/* Network */}
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                  <Network size={10} /> Net
+                </span>
+                <p className="text-foreground text-[10px] leading-tight">
+                  ↓{fmtBytes(vm.networkRxBytesPerSec)}/s
+                  <br />↑{fmtBytes(vm.networkTxBytesPerSec)}/s
+                </p>
+              </div>
+              {/* VRAM — always shown; N/A when no GPU */}
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground flex items-center gap-1 text-[11px]">
+                    <Gpu size={10} /> VRAM
+                  </span>
+                  <span
+                    className={cn(
+                      'text-[11px] font-semibold',
+                      vm.vramUsagePercent == null && 'text-muted-foreground'
+                    )}
+                  >
+                    {vm.vramUsagePercent != null
+                      ? `${vm.vramUsagePercent.toFixed(1)}%`
+                      : 'N/A'}
+                  </span>
+                </div>
+                {vm.vramUsagePercent != null ? (
+                  <Progress
+                    value={vm.vramUsagePercent}
+                    className={cn('h-1', gaugeColor(vm.vramUsagePercent))}
+                  />
+                ) : (
+                  <div className="mt-1 h-1 w-full rounded-full bg-slate-100" />
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground py-2 text-center text-xs">
+              Metrics unavailable — node unreachable
             </p>
-            <p className="truncate text-xs text-slate-400">{vm.instance}</p>
-          </div>
-        </div>
+          )}
 
-        <span
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${s.bg} ${s.text}`}
-        >
-          <span className={`h-1.5 w-1.5 rounded-full ${s.dot}`} />
-          {s.label}
-        </span>
-      </div>
-
-      {/* ── Metrics grid ── */}
-      {vm.up ? (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-          {/* CPU */}
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1 text-slate-400">
-                <Cpu size={11} />
-                <span className="text-[11px] font-medium">CPU</span>
+          {vm.up && (
+            <>
+              <p className="text-muted-foreground mt-3 border-t pt-2 text-[10px]">
+                Mem {fmtBytes(vm.memUsedBytes)} / {fmtBytes(vm.memTotalBytes)} ·{' '}
+                Disk {fmtBytes(vm.diskUsedBytes)} /{' '}
+                {fmtBytes(vm.diskTotalBytes)}
+              </p>
+              <div className="text-muted-foreground mt-1.5 flex items-center gap-3 text-[10px]">
+                <span className="flex items-center gap-1">
+                  <Layers size={9} /> I/O
+                </span>
+                <span>R: {fmtBytes(vm.diskReadBytesPerSec)}/s</span>
+                <span>W: {fmtBytes(vm.diskWriteBytesPerSec)}/s</span>
+                {vm.processCount != null && (
+                  <span>· {vm.processCount} procs</span>
+                )}
+                {vm.tempCelsius != null && (
+                  <span className="flex items-center gap-0.5">
+                    <Thermometer size={9} />
+                    {vm.tempCelsius.toFixed(0)}°C
+                  </span>
+                )}
               </div>
-              <span className="text-[11px] font-semibold text-slate-700">
-                {vm.cpuUsagePercent.toFixed(1)}%
-              </span>
-            </div>
-            <MiniGauge
-              value={vm.cpuUsagePercent}
-              colorClass={gaugeColor(vm.cpuUsagePercent)}
-            />
-          </div>
-
-          {/* Memory */}
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1 text-slate-400">
-                <MemoryStick size={11} />
-                <span className="text-[11px] font-medium">RAM</span>
-              </div>
-              <span className="text-[11px] font-semibold text-slate-700">
-                {vm.memUsagePercent.toFixed(1)}%
-              </span>
-            </div>
-            <MiniGauge
-              value={vm.memUsagePercent}
-              colorClass={gaugeColor(vm.memUsagePercent)}
-            />
-          </div>
-
-          {/* Disk */}
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1 text-slate-400">
-                <HardDrive size={11} />
-                <span className="text-[11px] font-medium">Disk</span>
-              </div>
-              <span className="text-[11px] font-semibold text-slate-700">
-                {vm.diskUsagePercent.toFixed(1)}%
-              </span>
-            </div>
-            <MiniGauge
-              value={vm.diskUsagePercent}
-              colorClass={gaugeColor(vm.diskUsagePercent)}
-            />
-          </div>
-
-          {/* Network */}
-          <div>
-            <div className="flex items-center gap-1 text-slate-400">
-              <Network size={11} />
-              <span className="text-[11px] font-medium">Net</span>
-            </div>
-            <p className="mt-0.5 text-[10px] leading-tight font-medium text-slate-600">
-              ↓{fmtBytes(vm.networkRxBytesPerSec)}/s
-              <br />↑{fmtBytes(vm.networkTxBytesPerSec)}/s
-            </p>
-          </div>
-        </div>
-      ) : (
-        <p className="py-2 text-center text-xs text-slate-400">
-          Metrics unavailable — node unreachable
-        </p>
-      )}
-
-      {/* ── Memory detail footer ── */}
-      {vm.up && (
-        <p className="border-t border-slate-100 pt-2 text-[10px] text-slate-400">
-          Mem: {fmtBytes(vm.memUsedBytes)} / {fmtBytes(vm.memTotalBytes)}{' '}
-          &nbsp;·&nbsp; Disk: {fmtBytes(vm.diskUsedBytes)} /{' '}
-          {fmtBytes(vm.diskTotalBytes)}
-        </p>
-      )}
+              <p className="text-muted-foreground mt-1 text-[10px]">
+                VRAM{' '}
+                {vm.vramTotalBytes != null && vm.vramUsedBytes != null
+                  ? `${fmtBytes(vm.vramUsedBytes)} / ${fmtBytes(vm.vramTotalBytes)}`
+                  : 'N/A'}
+              </p>
+            </>
+          )}
+        </CardContent>
+      </Card>
     </motion.div>
   )
 }
