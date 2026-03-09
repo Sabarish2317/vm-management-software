@@ -9,7 +9,11 @@
  */
 
 import axios from 'axios'
-import type { NodeMetrics, DashboardSummary } from '@/types/prometheus'
+import type {
+  NodeMetrics,
+  DashboardSummary,
+  NodeHistoryData,
+} from '@/types/prometheus'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
 
@@ -91,5 +95,23 @@ export async function fetchDashboardSummary(): Promise<DashboardSummary> {
 export async function fetchTargets(scrapePool?: string) {
   const params = scrapePool ? { scrapePool } : {}
   const { data } = await api.get('/api/targets', { params })
+  return data.data
+}
+
+/**
+ * Fetch time-series history for a single node (last 5 min by default).
+ * Maps to GET /api/metrics/:instance/history?os=linux|windows
+ */
+export async function fetchNodeHistory(
+  instance: string,
+  os: string,
+  rangeSeconds = 300,
+  stepSeconds = 15
+): Promise<NodeHistoryData> {
+  const { data } = await api.get<ApiResponse<NodeHistoryData>>(
+    `/api/metrics/${encodeURIComponent(instance)}/history`,
+    { params: { os, range: rangeSeconds, step: stepSeconds } }
+  )
+  if (!data.success) throw new Error(data.error ?? 'Failed to fetch history')
   return data.data
 }

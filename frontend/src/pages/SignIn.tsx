@@ -131,7 +131,7 @@ export default function SignIn() {
             <button
               type="submit"
               disabled={loading}
-              className="bg-primary text-primary-foreground h-10 w-full rounded-lg text-sm font-medium transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              className="bg-primary text-primary-foreground mt-3 h-10 w-full rounded-lg text-sm font-medium transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading
                 ? mode === 'login'

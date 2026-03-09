@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Server,
@@ -8,14 +9,20 @@ import {
   RefreshCw,
   Layers,
   LayoutGrid,
+  LogOut,
 } from 'lucide-react'
+import Cookies from 'js-cookie'
 import { useDashboardData } from '@/queries/useDashboard'
 import ClusterMonitoring from '@/components/dashboard/ClusterMonitoring'
 import VMMonitoring from '@/components/dashboard/VMMonitoring'
+import NodeDetailDialog from '@/components/dashboard/NodeDetailDialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import LogoutConfirmModal from '@/components/layout/LogoutConfirmModal'
+import { TOKEN_KEY } from '@/utils/authHandler'
+import type { NodeMetrics } from '@/types/prometheus'
 
 // ─── Summary metric card ──────────────────────────────────────────────────────
 
@@ -114,6 +121,15 @@ type DashTab = 'cluster' | 'vm'
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<DashTab>('cluster')
+  const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [selectedNode, setSelectedNode] = useState<NodeMetrics | null>(null)
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    Cookies.remove(TOKEN_KEY)
+    localStorage.removeItem('VM_USER')
+    navigate('/sign-in', { replace: true })
+  }
 
   const {
     linuxNodes,
@@ -133,124 +149,152 @@ const Dashboard: React.FC = () => {
   })
 
   return (
-    <div className="flex flex-col gap-6 px-1 pb-10">
-      {/* ── Page header ── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-foreground text-2xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground mt-0.5 text-sm">
-            Live infrastructure overview · auto-refreshes every 30 s
-          </p>
+    <>
+      <div className="flex flex-col gap-6 px-1 pb-10">
+        {/* ── Page header ── */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/icons/logo.png" alt="Logo" className="h-10 w-auto" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="gap-1.5 text-xs"
+            >
+              <RefreshCw
+                size={13}
+                className={isFetching ? 'animate-spin' : ''}
+              />
+              {isFetching ? 'Refreshing…' : `Updated ${lastUpdated}`}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLogoutModal(true)}
+              className="gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+            >
+              <LogOut size={13} />
+              Logout
+            </Button>
+          </div>
+          <LogoutConfirmModal
+            open={showLogoutModal}
+            onConfirm={handleLogout}
+            onCancel={() => setShowLogoutModal(false)}
+          />
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="gap-1.5 text-xs"
-        >
-          <RefreshCw size={13} className={isFetching ? 'animate-spin' : ''} />
-          {isFetching ? 'Refreshing…' : `Updated ${lastUpdated}`}
-        </Button>
-      </div>
 
-      {/* ── Summary strip ── */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-        <SummaryCard
-          label="Host Machines"
-          value={summary.totalHosts}
-          icon={<Server size={16} />}
-        />
-        <SummaryCard
-          label="Virtual Machines"
-          value={summary.totalVMs}
-          icon={<Monitor size={16} />}
-        />
-        <SummaryCard
-          label="Running"
-          value={summary.runningCount}
-          icon={<Activity size={16} />}
-          accent="success"
-        />
-        <SummaryCard
-          label="Unreachable"
-          value={summary.unreachableCount}
-          icon={<AlertTriangle size={16} />}
-          accent={summary.unreachableCount > 0 ? 'danger' : 'default'}
-        />
-        <SummaryCard
-          label="Avg CPU"
-          value={`${summary.avgCpuPercent.toFixed(1)}%`}
-          icon={<Activity size={16} />}
-          accent={summary.avgCpuPercent >= 85 ? 'warn' : 'default'}
-        />
-        <SummaryCard
-          label="Avg Memory"
-          value={`${summary.avgMemPercent.toFixed(1)}%`}
-          icon={<Activity size={16} />}
-          accent={summary.avgMemPercent >= 85 ? 'warn' : 'default'}
-        />
-      </div>
-
-      {/* ── Error banner ── */}
-      {isError && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Could not reach backend</AlertTitle>
-            <AlertDescription>
-              {(error as Error)?.message ??
-                'Check that the backend is running and VITE_API_BASE_URL is set correctly.'}
-            </AlertDescription>
-          </Alert>
-        </motion.div>
-      )}
-
-      {/* ── Mode tabs ── */}
-      <div className="flex gap-2">
-        <TabBtn
-          active={activeTab === 'cluster'}
-          onClick={() => setActiveTab('cluster')}
-          icon={<Layers size={14} />}
-          label="Cluster Monitoring"
-          count={summary.linuxCount}
-        />
-        <TabBtn
-          active={activeTab === 'vm'}
-          onClick={() => setActiveTab('vm')}
-          icon={<LayoutGrid size={14} />}
-          label="VM Monitoring"
-          count={summary.windowsCount}
-        />
-      </div>
-
-      {/* ── Tab content ── */}
-      <motion.div
-        key={activeTab}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.25 }}
-      >
-        {activeTab === 'cluster' ? (
-          <ClusterMonitoring
-            nodes={linuxNodes}
-            isLoading={isLoading}
-            isFetching={isFetching}
-            onRefresh={refetch}
+        {/* ── Summary strip ── */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          <SummaryCard
+            label="Host Machines"
+            value={summary.totalHosts}
+            icon={<Server size={16} />}
           />
-        ) : (
-          <VMMonitoring
-            vms={windowsNodes}
-            isLoading={isLoading}
-            isFetching={isFetching}
-            onRefresh={refetch}
+          <SummaryCard
+            label="Virtual Machines"
+            value={summary.totalVMs}
+            icon={<Monitor size={16} />}
           />
+          <SummaryCard
+            label="Running"
+            value={summary.runningCount}
+            icon={<Activity size={16} />}
+            accent="success"
+          />
+          <SummaryCard
+            label="Unreachable"
+            value={summary.unreachableCount}
+            icon={<AlertTriangle size={16} />}
+            accent={summary.unreachableCount > 0 ? 'danger' : 'default'}
+          />
+          <SummaryCard
+            label="Avg CPU"
+            value={`${summary.avgCpuPercent.toFixed(1)}%`}
+            icon={<Activity size={16} />}
+            accent={summary.avgCpuPercent >= 85 ? 'warn' : 'default'}
+          />
+          <SummaryCard
+            label="Avg Memory"
+            value={`${summary.avgMemPercent.toFixed(1)}%`}
+            icon={<Activity size={16} />}
+            accent={summary.avgMemPercent >= 85 ? 'warn' : 'default'}
+          />
+        </div>
+
+        {/* ── Error banner ── */}
+        {isError && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Could not reach backend</AlertTitle>
+              <AlertDescription>
+                {(error as Error)?.message ??
+                  'Check that the backend is running and VITE_API_BASE_URL is set correctly.'}
+              </AlertDescription>
+            </Alert>
+          </motion.div>
         )}
-      </motion.div>
-    </div>
+
+        {/* ── Mode tabs ── */}
+        <div className="flex gap-2">
+          <TabBtn
+            active={activeTab === 'cluster'}
+            onClick={() => setActiveTab('cluster')}
+            icon={<Layers size={14} />}
+            label="Cluster Monitoring"
+            count={summary.linuxCount}
+          />
+          <TabBtn
+            active={activeTab === 'vm'}
+            onClick={() => setActiveTab('vm')}
+            icon={<LayoutGrid size={14} />}
+            label="VM Monitoring"
+            count={summary.windowsCount}
+          />
+        </div>
+
+        {/* ── Tab content ── */}
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+        >
+          {activeTab === 'cluster' ? (
+            <ClusterMonitoring
+              nodes={linuxNodes}
+              isLoading={isLoading}
+              isFetching={isFetching}
+              onRefresh={refetch}
+              onNodeClick={setSelectedNode}
+            />
+          ) : (
+            <VMMonitoring
+              vms={windowsNodes}
+              isLoading={isLoading}
+              isFetching={isFetching}
+              onRefresh={refetch}
+              onNodeClick={setSelectedNode}
+            />
+          )}
+        </motion.div>
+      </div>
+
+      {/* ── Node detail popup ── */}
+      {selectedNode && (
+        <NodeDetailDialog
+          node={selectedNode}
+          onClose={() => setSelectedNode(null)}
+        />
+      )}
+    </>
   )
 }
 

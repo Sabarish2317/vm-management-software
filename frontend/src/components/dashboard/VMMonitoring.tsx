@@ -171,6 +171,7 @@ interface Props {
   isLoading: boolean
   isFetching: boolean
   onRefresh: () => void
+  onNodeClick?: (node: NodeMetrics) => void
 }
 
 const VMMonitoring: React.FC<Props> = ({
@@ -178,6 +179,7 @@ const VMMonitoring: React.FC<Props> = ({
   isLoading,
   isFetching,
   onRefresh,
+  onNodeClick,
 }) => {
   const [search, setSearch] = useState('')
   const [selectedVM, setSelectedVM] = useState<string>('all')
@@ -350,7 +352,8 @@ const VMMonitoring: React.FC<Props> = ({
                         return (
                           <tr
                             key={n.instance}
-                            className="border-b border-slate-100 transition-colors hover:bg-slate-50"
+                            onClick={() => onNodeClick?.(n)}
+                            className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-blue-50"
                           >
                             <td className="border-r border-slate-100 px-4 py-3">
                               <div className="flex items-center gap-2">
@@ -576,7 +579,8 @@ const VMMonitoring: React.FC<Props> = ({
                     : filtered.map((n) => (
                         <tr
                           key={n.instance}
-                          className="border-b border-slate-100 transition-colors hover:bg-slate-50"
+                          onClick={() => onNodeClick?.(n)}
+                          className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-blue-50"
                         >
                           <td className="border-r border-slate-100 px-4 py-3">
                             <div className="flex items-center gap-2">

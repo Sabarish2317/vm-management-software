@@ -3,8 +3,8 @@ import { useMemo } from 'react'
 import { fetchAllNodeMetrics } from './prometheusService'
 import type { DashboardSummary, NodeMetrics } from '@/types/prometheus'
 
-/** Refetch every 30 seconds so the dashboard stays live */
-const REFETCH_INTERVAL = 30_000
+/** Refetch every 15 seconds so the dashboard stays live */
+const REFETCH_INTERVAL = 15_000
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Raw hook – returns all nodes un-filtered

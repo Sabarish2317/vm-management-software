@@ -187,15 +187,17 @@ interface Props {
   isLoading: boolean
   isFetching: boolean
   onRefresh: () => void
+  onNodeClick?: (node: NodeMetrics) => void
 }
 
-// ─── ClusterMonitoring ────────────────────────────────────────────────────────
+// ─── ClusterMonitoring ───────────────────────────────────────────────────
 
 const ClusterMonitoring: React.FC<Props> = ({
   nodes,
   isLoading,
   isFetching,
   onRefresh,
+  onNodeClick,
 }) => {
   const [search, setSearch] = useState('')
   const [selectedNode, setSelectedNode] = useState<string>('all')
@@ -385,7 +387,8 @@ const ClusterMonitoring: React.FC<Props> = ({
                         return (
                           <tr
                             key={n.instance}
-                            className="border-b border-slate-100 transition-colors hover:bg-slate-50"
+                            onClick={() => onNodeClick?.(n)}
+                            className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-blue-50"
                           >
                             {/* Device */}
                             <td className="border-r border-slate-100 px-4 py-3">
@@ -609,7 +612,8 @@ const ClusterMonitoring: React.FC<Props> = ({
                     : filtered.map((n) => (
                         <tr
                           key={n.instance}
-                          className="border-b border-slate-100 transition-colors hover:bg-slate-50"
+                          onClick={() => onNodeClick?.(n)}
+                          className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-blue-50"
                         >
                           {/* Device */}
                           <td className="border-r border-slate-100 px-4 py-3">

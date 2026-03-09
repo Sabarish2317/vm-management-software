@@ -138,3 +138,43 @@ export interface DashboardSummary {
   linuxCount: number;
   windowsCount: number;
 }
+
+// ─── Range / history API shapes ──────────────────────────────────────────────
+
+export interface PrometheusRangeQueryResponse {
+  status: "success" | "error";
+  data: {
+    resultType: "matrix";
+    result: PrometheusRangeResult[];
+  };
+  errorType?: string;
+  error?: string;
+}
+
+export interface MetricPoint {
+  /** Unix timestamp in seconds */
+  t: number;
+  /** Metric value */
+  v: number;
+}
+
+export interface NodeHistoryData {
+  /** CPU usage % over time */
+  cpu: MetricPoint[];
+  /** CPU temperature °C – null if not available */
+  cpuTemp: MetricPoint[] | null;
+  /** RAM usage % */
+  ram: MetricPoint[];
+  /** Disk usage % */
+  disk: MetricPoint[];
+  /** Network receive bytes/sec */
+  networkRx: MetricPoint[];
+  /** Network transmit bytes/sec */
+  networkTx: MetricPoint[];
+  /** Disk read bytes/sec */
+  diskRead: MetricPoint[];
+  /** Disk write bytes/sec */
+  diskWrite: MetricPoint[];
+  /** GPU VRAM usage % – null if no GPU */
+  vram: MetricPoint[] | null;
+}

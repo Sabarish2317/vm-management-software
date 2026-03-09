@@ -8,6 +8,8 @@ import axios, { AxiosError } from "axios";
 import { config } from "../config";
 import type {
   PrometheusQueryResponse,
+  PrometheusRangeQueryResponse,
+  PrometheusRangeResult,
   PrometheusTargetsResponse,
   PrometheusVectorResult,
 } from "../types";
@@ -63,6 +65,33 @@ export async function fetchTargets(): Promise<
     const axiosErr = err as AxiosError;
     if (axiosErr.isAxiosError) {
       throw new Error(`Prometheus targets request failed: ${axiosErr.message}`);
+    }
+    throw err;
+  }
+}
+
+/** Execute a PromQL range query and return the result matrix. */
+export async function rangeQuery(
+  promql: string,
+  start: number,
+  end: number,
+  step: string,
+): Promise<PrometheusRangeResult[]> {
+  try {
+    const { data } = await client.get<PrometheusRangeQueryResponse>(
+      "/api/v1/query_range",
+      { params: { query: promql, start, end, step } },
+    );
+    if (data.status !== "success") {
+      throw new Error(
+        `Prometheus range error [${data.errorType ?? "unknown"}]: ${data.error ?? ""}`,
+      );
+    }
+    return data.data.result;
+  } catch (err) {
+    const axiosErr = err as AxiosError;
+    if (axiosErr.isAxiosError) {
+      throw new Error(`Prometheus range request failed: ${axiosErr.message}`);
     }
     throw err;
   }

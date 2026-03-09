@@ -67,6 +67,45 @@ router.get("/all", async (_req: Request, res: Response, next: NextFunction) => {
   }
 });
 
+/** GET /api/metrics/:instance/history – last N seconds of time-series data */
+router.get(
+  "/:instance/history",
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const instance = decodeURIComponent(String(req.params.instance));
+      const os = String(req.query.os ?? "") as "linux" | "windows";
+      const rangeSeconds = Math.min(
+        600,
+        Math.max(60, parseInt(String(req.query.range ?? "300"), 10)),
+      );
+      const stepSeconds = Math.max(
+        5,
+        parseInt(String(req.query.step ?? "15"), 10),
+      );
+
+      if (!os || !["linux", "windows"].includes(os)) {
+        res.status(400).json({
+          success: false,
+          error: "Query param 'os' must be 'linux' or 'windows'",
+        });
+        return;
+      }
+
+      const { fetchNodeHistory } = await import("../prometheus/historyQueries");
+      const data = await fetchNodeHistory(
+        instance,
+        os,
+        rangeSeconds,
+        stepSeconds,
+      );
+
+      res.json({ success: true, instance, os, data });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
 /** GET /api/metrics/:instance – lookup a single node's metrics */
 router.get(
   "/:instance",

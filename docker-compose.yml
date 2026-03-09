@@ -1,0 +1,26 @@
+services:
+  # ── Backend ────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+    image: vm-management-backend
+    container_name: vm-management-backend
+    restart: unless-stopped
+    ports:
+      - "3000:3001"
+    env_file:
+      - ./backend/.env
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:3000
+    image: vm-management-frontend
+    container_name: vm-management-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend

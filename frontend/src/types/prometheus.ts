@@ -71,6 +71,27 @@ export interface DashboardSummary {
   windowsCount: number
 }
 
+// ─── History / range types ───────────────────────────────────────────────────
+
+export interface MetricPoint {
+  /** Unix timestamp in seconds */
+  t: number
+  /** Metric value */
+  v: number
+}
+
+export interface NodeHistoryData {
+  cpu: MetricPoint[]
+  cpuTemp: MetricPoint[] | null
+  ram: MetricPoint[]
+  disk: MetricPoint[]
+  networkRx: MetricPoint[]
+  networkTx: MetricPoint[]
+  diskRead: MetricPoint[]
+  diskWrite: MetricPoint[]
+  vram: MetricPoint[] | null
+}
+
 // ─── Raw Prometheus HTTP API shapes (kept for reference) ──────────────────
 
 export interface PrometheusMetric {
